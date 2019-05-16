@@ -4,7 +4,10 @@ from __future__ import unicode_literals
 
 import time
 
-from django.core.urlresolvers import resolve, Resolver404
+from django.urls import Resolver404, resolve
+
+from .actionlog import ActionLog
+from .sql_logger import SqlLogger, ready_sql_logger
 
 try:
     from django.conf import settings
@@ -17,8 +20,6 @@ try:
 except ImportError:
     MiddlewareMixin = object
 
-from .sql_logger import SqlLogger, ready_sql_logger
-from .actionlog import ActionLog
 
 _action_log = ActionLog(ACTION_LOG_SETTING, is_middleware=True)
 _is_enable = True if ACTION_LOG_SETTING['handler_type'] != 'null' else False
@@ -71,7 +72,12 @@ class ActionLogMiddleware(MiddlewareMixin):
         if hasattr(request, login_obj_name):
             login_obj = getattr(request, login_obj_name)
             login_check_func = ACTION_LOG_SETTING.get('login_check_func', 'is_authenticated')
-            if getattr(login_obj, login_check_func)():
+            checker = getattr(login_obj, login_check_func)
+            try:
+                result = checker()
+            except TypeError:
+                result = checker
+            if result:
                 if hasattr(login_obj, 'actionlog_name'):
                     user_name = login_obj.actionlog_name
                 else:
